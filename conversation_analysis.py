@@ -50,7 +50,7 @@ class ConversationAnalyzer:
         overtalk_duration = 0
         silence_duration = 0
 
-        previous_end_time = 0  # Initialize previous end time to 0
+        previous_end_time = 0
 
         for utterance in conversations:
             start_time = utterance['stime']

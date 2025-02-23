@@ -7,6 +7,8 @@ import tempfile
 import matplotlib.pyplot as plt
 from conversation_analysis import ConversationAnalyzer
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import numpy as np
+import plotly.graph_objects as go
 
 # Load JSON file
 def load_json(file):
@@ -63,7 +65,7 @@ def main():
     if uploaded_file is not None:
         data = load_json_files_from_zip(uploaded_file)
 
-        # Dropdowns for Profanity Detection and Privacy Violation
+        # Dropdowns
         analysis_type = st.selectbox("Select Analysis Type", ["Profanity Detection", "Privacy and Compliance Violation", "Call Quality Metrics Analysis"])
 
         analyzer = ConversationAnalyzer()
@@ -104,11 +106,9 @@ def main():
                             "privacy_violation_detected": any(result == "True" for result in llm_results)
                         })
 
-            # Output results for Profanity Detection and Privacy Violation
             st.write("Analysis Results:", results)
 
         elif analysis_type == "Call Quality Metrics Analysis":
-            # Directly analyze Call Quality Metrics when selected
             metrics_results = []
             for json_data, call_id in data:
                 metrics = analyzer.calculate_overtalk_and_silence(json_data)
@@ -123,21 +123,31 @@ def main():
             overtalk_percentages = [result['overtalk_percentage'] for result in metrics_results]
             silence_percentages = [result['silence_percentage'] for result in metrics_results]
 
-            fig, ax = plt.subplots()
-            bar_width = 0.35
-            index = range(len(call_ids))
+            # interactive bar chart
+            fig = go.Figure()
 
-            bar1 = ax.bar(index, overtalk_percentages, bar_width, label='Overtalk Percentage', color='b')
-            bar2 = ax.bar([i + bar_width for i in index], silence_percentages, bar_width, label='Silence Percentage', color='r')
+            fig.add_trace(go.Bar(
+                x=call_ids,
+                y=overtalk_percentages,
+                name='Overtalk Percentage',
+                marker_color='blue'
+            ))
 
-            ax.set_xlabel('Call ID')
-            ax.set_ylabel('Percentage (%)')
-            ax.set_title('Call Quality Metrics: Overtalk and Silence Percentages')
-            ax.set_xticks([i + bar_width / 2 for i in index])
-            ax.set_xticklabels(call_ids)
-            ax.legend()
+            fig.add_trace(go.Bar(
+                x=call_ids,
+                y=silence_percentages,
+                name='Silence Percentage',
+                marker_color='red'
+            ))
 
-            st.pyplot(fig)
+            fig.update_layout(
+                title='Call Quality Metrics: Overtalk and Silence Percentages',
+                xaxis_title='Call ID',
+                yaxis_title='Percentage (%)',
+                barmode='group'
+            )
+
+            st.plotly_chart(fig)
 
 if __name__ == "__main__":
     main()
