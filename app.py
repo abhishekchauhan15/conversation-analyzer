@@ -5,6 +5,7 @@ import os
 import zipfile
 import tempfile
 from conversation_analysis import ConversationAnalyzer
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Load JSON file
 def load_json(file):
@@ -22,13 +23,30 @@ def load_json_files_from_zip(zip_file):
 
 # Query Llama 3.1 model
 def query_llama(prompt):
+    ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    ollama_model = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
+
     response = requests.post(
-        "http://localhost:5000/generate",
-        json={"prompt": prompt}
+        f"{ollama_base_url}/generate",
+        json={"model": ollama_model, "prompt": prompt}
     )
     if response.status_code == 200:
         return response.json().get("response", "")
     return ""
+
+# Function to run LLM queries in parallel
+def run_llm_queries(prompts):
+    results = []
+    with ThreadPoolExecutor() as executor:
+        future_to_prompt = {executor.submit(query_llama, prompt): prompt for prompt in prompts}
+        for future in as_completed(future_to_prompt):
+            prompt = future_to_prompt[future]
+            try:
+                result = future.result()
+                results.append(result)
+            except Exception as exc:
+                st.error(f"Error occurred while processing prompt: {prompt} - {exc}")
+    return results
 
 # prompts for Llama 3.1
 PROFANITY_PROMPT = "Analyze the following text and detect any profane language. Return 'True' if profanity is found, otherwise 'False': {text}"
@@ -66,10 +84,11 @@ def main():
                         "borrower_profanity_detected": len(result['borrower_call_ids']) > 0
                     })
                 else:  # LLM
-                    result = any(query_llama(PROFANITY_PROMPT.format(text=conv['text'])) == "True" for conv in json_data)
+                    prompts = [PROFANITY_PROMPT.format(text=conv['text']) for conv in json_data]
+                    llm_results = run_llm_queries(prompts)
                     results.append({
                         "call_id": call_id,
-                        "profanity_detected": result
+                        "profanity_detected": any(result == "True" for result in llm_results)
                     })
             elif entity == "Privacy and Compliance Violation":
                 if approach == "Pattern Matching":
@@ -79,10 +98,11 @@ def main():
                         "privacy_violation_detected": len(result) > 0
                     })
                 else:  # LLM
-                    result = any(query_llama(PRIVACY_PROMPT.format(text=conv['text'])) == "True" for conv in json_data)
+                    prompts = [PRIVACY_PROMPT.format(text=conv['text']) for conv in json_data]
+                    llm_results = run_llm_queries(prompts)
                     results.append({
                         "call_id": call_id,
-                        "privacy_violation_detected": result
+                        "privacy_violation_detected": any(result == "True" for result in llm_results)
                     })
 
         # Output
