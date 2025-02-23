@@ -45,14 +45,34 @@ class ConversationAnalyzer:
 
         return has_sensitive_info and not has_verification
 
-    def calculate_overtalk_percentage(self, call_data):
-        # Calculate the percentage of time where both parties are speaking simultaneously
-        total_duration = call_data['duration']
-        overtalk_duration = call_data['overtalk_duration']
-        return (overtalk_duration / total_duration) * 100 if total_duration > 0 else 0
+    def calculate_overtalk_and_silence(self, conversations):
+        total_duration = 0
+        overtalk_duration = 0
+        silence_duration = 0
 
-    def calculate_silence_percentage(self, call_data):
-        # Calculate the percentage of time where neither party is speaking
-        total_duration = call_data['duration']
-        silence_duration = call_data['silence_duration']
-        return (silence_duration / total_duration) * 100 if total_duration > 0 else 0
+        previous_end_time = 0  # Initialize previous end time to 0
+
+        for utterance in conversations:
+            start_time = utterance['stime']
+            end_time = utterance['etime']
+            duration = end_time - start_time
+
+            total_duration += duration
+
+            if previous_end_time > start_time:
+                # Overtalk detected
+                overtalk_duration += min(end_time, previous_end_time) - start_time
+
+            previous_end_time = end_time
+
+        # Calculate silence duration
+        silence_duration = total_duration - overtalk_duration
+
+        # Calculate percentages
+        overtalk_percentage = (overtalk_duration / total_duration) * 100 if total_duration > 0 else 0
+        silence_percentage = (silence_duration / total_duration) * 100 if total_duration > 0 else 0
+
+        return {
+            'overtalk_percentage': overtalk_percentage,
+            'silence_percentage': silence_percentage
+        }

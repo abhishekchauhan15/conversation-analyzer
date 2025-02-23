@@ -4,6 +4,7 @@ import requests
 import os
 import zipfile
 import tempfile
+import matplotlib.pyplot as plt
 from conversation_analysis import ConversationAnalyzer
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -60,53 +61,83 @@ def main():
     uploaded_file = st.file_uploader("Upload a zip file containing JSON files", type=["zip"])
 
     if uploaded_file is not None:
-        data = []
-
-        # Load JSON files from the zip file
         data = load_json_files_from_zip(uploaded_file)
 
-        # Dropdowns
-        approach = st.selectbox("Select Approach", ["Pattern Matching", "LLM"])
-        entity = st.selectbox("Select Entity", ["Profanity Detection", "Privacy and Compliance Violation"])
+        # Dropdowns for Profanity Detection and Privacy Violation
+        analysis_type = st.selectbox("Select Analysis Type", ["Profanity Detection", "Privacy and Compliance Violation", "Call Quality Metrics Analysis"])
 
         analyzer = ConversationAnalyzer()
 
-        # Analyze
-        results = []
-        for json_data, call_id in data:
-            print("processing file...", call_id)
-            if entity == "Profanity Detection":
-                if approach == "Pattern Matching":
-                    result = analyzer.identify_profanity_call_ids(json_data, call_id)
-                    results.append({
-                        "call_id": call_id,
-                        "agent_profanity_detected": len(result['agent_call_ids']) > 0,
-                        "borrower_profanity_detected": len(result['borrower_call_ids']) > 0
-                    })
-                else:  # LLM
-                    prompts = [PROFANITY_PROMPT.format(text=conv['text']) for conv in json_data]
-                    llm_results = run_llm_queries(prompts)
-                    results.append({
-                        "call_id": call_id,
-                        "profanity_detected": any(result == "True" for result in llm_results)
-                    })
-            elif entity == "Privacy and Compliance Violation":
-                if approach == "Pattern Matching":
-                    result = analyzer.identify_privacy_violation_call_ids(json_data, call_id)
-                    results.append({
-                        "call_id": call_id,
-                        "privacy_violation_detected": len(result) > 0
-                    })
-                else:  # LLM
-                    prompts = [PRIVACY_PROMPT.format(text=conv['text']) for conv in json_data]
-                    llm_results = run_llm_queries(prompts)
-                    results.append({
-                        "call_id": call_id,
-                        "privacy_violation_detected": any(result == "True" for result in llm_results)
-                    })
+        if analysis_type in ["Profanity Detection", "Privacy and Compliance Violation"]:
+            approach = st.selectbox("Select Approach", ["Pattern Matching", "LLM"])
 
-        # Output
-        st.write("Analysis Results:", results)
+            # Analyze each call
+            results = []
+            for json_data, call_id in data:
+                if analysis_type == "Profanity Detection":
+                    if approach == "Pattern Matching":
+                        result = analyzer.identify_profanity_call_ids(json_data, call_id)
+                        results.append({
+                            "call_id": call_id,
+                            "agent_profanity_detected": len(result['agent_call_ids']) > 0,
+                            "borrower_profanity_detected": len(result['borrower_call_ids']) > 0
+                        })
+                    else:
+                        prompts = [f"Analyze the following text and detect any profane language: {conv['text']}" for conv in json_data]
+                        llm_results = run_llm_queries(prompts)
+                        results.append({
+                            "call_id": call_id,
+                            "profanity_detected": any(result == "True" for result in llm_results)
+                        })
+                elif analysis_type == "Privacy and Compliance Violation":
+                    if approach == "Pattern Matching":
+                        result = analyzer.identify_privacy_violation_call_ids(json_data, call_id)
+                        results.append({
+                            "call_id": call_id,
+                            "privacy_violation_detected": len(result) > 0
+                        })
+                    else:
+                        prompts = [f"Analyze the following text for sensitive information: {conv['text']}" for conv in json_data]
+                        llm_results = run_llm_queries(prompts)
+                        results.append({
+                            "call_id": call_id,
+                            "privacy_violation_detected": any(result == "True" for result in llm_results)
+                        })
+
+            # Output results for Profanity Detection and Privacy Violation
+            st.write("Analysis Results:", results)
+
+        elif analysis_type == "Call Quality Metrics Analysis":
+            # Directly analyze Call Quality Metrics when selected
+            metrics_results = []
+            for json_data, call_id in data:
+                metrics = analyzer.calculate_overtalk_and_silence(json_data)
+                metrics_results.append({
+                    "call_id": call_id,
+                    "overtalk_percentage": metrics['overtalk_percentage'],
+                    "silence_percentage": metrics['silence_percentage']
+                })
+
+            # Visualization
+            call_ids = [result['call_id'] for result in metrics_results]
+            overtalk_percentages = [result['overtalk_percentage'] for result in metrics_results]
+            silence_percentages = [result['silence_percentage'] for result in metrics_results]
+
+            fig, ax = plt.subplots()
+            bar_width = 0.35
+            index = range(len(call_ids))
+
+            bar1 = ax.bar(index, overtalk_percentages, bar_width, label='Overtalk Percentage', color='b')
+            bar2 = ax.bar([i + bar_width for i in index], silence_percentages, bar_width, label='Silence Percentage', color='r')
+
+            ax.set_xlabel('Call ID')
+            ax.set_ylabel('Percentage (%)')
+            ax.set_title('Call Quality Metrics: Overtalk and Silence Percentages')
+            ax.set_xticks([i + bar_width / 2 for i in index])
+            ax.set_xticklabels(call_ids)
+            ax.legend()
+
+            st.pyplot(fig)
 
 if __name__ == "__main__":
     main()

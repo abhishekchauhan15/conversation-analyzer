@@ -3,3 +3,4 @@ langchain
 ollama
 faiss-cpu
 requests
+matplotlib
