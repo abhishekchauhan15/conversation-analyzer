@@ -50,27 +50,6 @@ def run_llm_queries(prompts):
                 st.error(f"Error occurred while processing prompt: {prompt} - {exc}")
     return results
 
-#recommend approach based on content analysis
-def recommend_approach(json_data):
-    recommendations = []
-    for conv in json_data:
-        text = conv['text']
-        text_length = len(text.split())
-        sentiment = TextBlob(text).sentiment
-        polarity, subjectivity = sentiment.polarity, sentiment.subjectivity
-        
-        profanity_count = len(re.findall(r'\b(shit|fuck|damn|bitch|asshole|crap|dick)\b', text, re.IGNORECASE))
-        sensitive_info_count = len(re.findall(r'\b(account|ssn|credit card|debit card|bank account)\b', text, re.IGNORECASE))
-        keyword_density = (profanity_count + sensitive_info_count) / max(1, text_length)
-        
-        confidence_score = (abs(polarity) + subjectivity + keyword_density + (text_length / 100)) * 10
-        
-        if profanity_count > 2 or sensitive_info_count > 1 or confidence_score > 7:
-            recommendations.append("Use LLM")
-        else:
-            recommendations.append("Use Pattern Matching")
-    return recommendations
-
 # Prompts
 PROFANITY_PROMPT = (
     "You are an AI language model tasked with analyzing conversations. "
