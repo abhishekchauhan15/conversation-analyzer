@@ -36,7 +36,7 @@ def query_llama(prompt):
         return response.json().get("response", "")
     return ""
 
-# Function to run LLM queries in parallel
+# run LLM queries in parallel
 def run_llm_queries(prompts):
     results = []
     with ThreadPoolExecutor() as executor:
@@ -50,7 +50,7 @@ def run_llm_queries(prompts):
                 st.error(f"Error occurred while processing prompt: {prompt} - {exc}")
     return results
 
-# Function to recommend approach based on content analysis
+#recommend approach based on content analysis
 def recommend_approach(json_data):
     recommendations = []
     for conv in json_data:
@@ -71,9 +71,24 @@ def recommend_approach(json_data):
             recommendations.append("Use Pattern Matching")
     return recommendations
 
-# prompts for Llama 3.1
-PROFANITY_PROMPT = "Analyze the following text and detect any profane language. Return 'True' if profanity is found, otherwise 'False': {text}"
-PRIVACY_PROMPT = "Analyze the following text and detect if sensitive information (balance, account, SSN, date of birth, address) is shared without proper verification. Return 'True' if a violation is found, otherwise 'False': {text}"
+# Prompts
+PROFANITY_PROMPT = (
+    "You are an AI language model tasked with analyzing conversations. "
+    "Please review the following text from a conversation between a customer and an agent. "
+    "Identify any instances of profane language, including but not limited to: "
+    "swear words, derogatory terms, and offensive language. "
+    "Return 'True' if any profanity is found, otherwise return 'False'. "
+    "Additionally, provide a brief summary of the context in which the profanity was used: {text}"
+)
+
+PRIVACY_PROMPT = (
+    "You are an AI language model responsible for ensuring privacy compliance. "
+    "Analyze the following text from a conversation and determine if any sensitive information is shared. "
+    "Look for information such as account numbers, social security numbers, credit card details, "
+    "and personal identifiers like date of birth or address. "
+    "Return 'True' if a violation is found, otherwise return 'False'. "
+    "If a violation is detected, please explain what sensitive information was shared and the context: {text}"
+)
 
 # Streamlit app
 def main():
@@ -100,7 +115,7 @@ def main():
                         result = analyzer.identify_profanity_call_ids(json_data, call_id)
                         results.append(result)
                     else:
-                        prompts = [f"Analyze the following text and detect any profane language: {conv['text']}" for conv in json_data]
+                        prompts = [PROFANITY_PROMPT.format(text=conv['text']) for conv in json_data]
                         llm_results = run_llm_queries(prompts)
                         results.append({
                             "call_id": call_id,
@@ -111,7 +126,7 @@ def main():
                         result = analyzer.identify_privacy_violation_call_ids(json_data, call_id)
                         results.append(result)
                     else:
-                        prompts = [f"Analyze the following text for sensitive information: {conv['text']}" for conv in json_data]
+                        prompts = [PRIVACY_PROMPT.format(text=conv['text']) for conv in json_data]
                         llm_results = run_llm_queries(prompts)
                         results.append({
                             "call_id": call_id,
