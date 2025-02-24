@@ -93,4 +93,15 @@ Based on the analysis, the final decision is made as follows:
 
 This method provides a comprehensive evaluation of the conversation, allowing users to make informed decisions about which approach to use for further analysis.
 
+## Profanity Detection
+![1](https://github.com/user-attachments/assets/89a984d5-3d38-4c02-acc9-03a0d7330509)
+![2](https://github.com/user-attachments/assets/4733e1b2-afc4-453b-a04c-5ebcbf6883c0)
+
+## Privacy Compliance 
+![image](https://github.com/user-attachments/assets/3bdde8ef-981c-4b8c-a80c-36bbbe86e58f)
+
+
+## Call Quality Metrics
+![3](https://github.com/user-attachments/assets/5c286ba3-dedc-479c-a253-1aaaf37a4062)
+
 
