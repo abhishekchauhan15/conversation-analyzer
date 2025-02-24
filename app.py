@@ -3,12 +3,11 @@ import json
 import requests
 import os
 import zipfile
-import tempfile
-import matplotlib.pyplot as plt
 from conversation_analysis import ConversationAnalyzer
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import numpy as np
 import plotly.graph_objects as go
+from textblob import TextBlob  
+import re
 
 # Load JSON file
 def load_json(file):
@@ -51,6 +50,27 @@ def run_llm_queries(prompts):
                 st.error(f"Error occurred while processing prompt: {prompt} - {exc}")
     return results
 
+# Function to recommend approach based on content analysis
+def recommend_approach(json_data):
+    recommendations = []
+    for conv in json_data:
+        text = conv['text']
+        text_length = len(text.split())
+        sentiment = TextBlob(text).sentiment
+        polarity, subjectivity = sentiment.polarity, sentiment.subjectivity
+        
+        profanity_count = len(re.findall(r'\b(shit|fuck|damn|bitch|asshole|crap|dick)\b', text, re.IGNORECASE))
+        sensitive_info_count = len(re.findall(r'\b(account|ssn|credit card|debit card|bank account)\b', text, re.IGNORECASE))
+        keyword_density = (profanity_count + sensitive_info_count) / max(1, text_length)
+        
+        confidence_score = (abs(polarity) + subjectivity + keyword_density + (text_length / 100)) * 10
+        
+        if profanity_count > 2 or sensitive_info_count > 1 or confidence_score > 7:
+            recommendations.append("Use LLM")
+        else:
+            recommendations.append("Use Pattern Matching")
+    return recommendations
+
 # prompts for Llama 3.1
 PROFANITY_PROMPT = "Analyze the following text and detect any profane language. Return 'True' if profanity is found, otherwise 'False': {text}"
 PRIVACY_PROMPT = "Analyze the following text and detect if sensitive information (balance, account, SSN, date of birth, address) is shared without proper verification. Return 'True' if a violation is found, otherwise 'False': {text}"
@@ -59,7 +79,6 @@ PRIVACY_PROMPT = "Analyze the following text and detect if sensitive information
 def main():
     st.title("Conversation Analysis Tool")
 
-    # Upload zip file
     uploaded_file = st.file_uploader("Upload a zip file containing JSON files", type=["zip"])
 
     if uploaded_file is not None:
@@ -79,32 +98,34 @@ def main():
                 if analysis_type == "Profanity Detection":
                     if approach == "Pattern Matching":
                         result = analyzer.identify_profanity_call_ids(json_data, call_id)
-                        results.append({
-                            "call_id": call_id,
-                            "agent_profanity_detected": len(result['agent_call_ids']) > 0,
-                            "borrower_profanity_detected": len(result['borrower_call_ids']) > 0
-                        })
+                        results.append(result)
                     else:
                         prompts = [f"Analyze the following text and detect any profane language: {conv['text']}" for conv in json_data]
                         llm_results = run_llm_queries(prompts)
                         results.append({
                             "call_id": call_id,
-                            "profanity_detected": any(result == "True" for result in llm_results)
+                            "profanity_detected": any(result == "True" for result in llm_results),
                         })
                 elif analysis_type == "Privacy and Compliance Violation":
                     if approach == "Pattern Matching":
                         result = analyzer.identify_privacy_violation_call_ids(json_data, call_id)
-                        results.append({
-                            "call_id": call_id,
-                            "privacy_violation_detected": len(result) > 0
-                        })
+                        results.append(result)
                     else:
                         prompts = [f"Analyze the following text for sensitive information: {conv['text']}" for conv in json_data]
                         llm_results = run_llm_queries(prompts)
                         results.append({
                             "call_id": call_id,
-                            "privacy_violation_detected": any(result == "True" for result in llm_results)
+                            "privacy_violation_detected": any(result == "True" for result in llm_results),
                         })
+
+            # Button to compare approaches
+            if st.button("Compare Approaches"):
+                if analysis_type == "Profanity Detection":
+                    overall_profanity_recommendation = analyzer.get_overall_recommendation([conv for json_data, _ in data for conv in json_data if analysis_type == "Profanity Detection"])
+                    st.write(f"Recommended Approach for Profanity Detection: {overall_profanity_recommendation}")
+                elif analysis_type == "Privacy and Compliance Violation":
+                    overall_privacy_recommendation = analyzer.get_overall_recommendation([conv for json_data, _ in data for conv in json_data if analysis_type == "Privacy and Compliance Violation"])
+                    st.write(f"Recommended Approach for Privacy and Compliance Violation: {overall_privacy_recommendation}")
 
             st.write("Analysis Results:", results)
 
